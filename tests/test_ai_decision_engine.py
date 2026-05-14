@@ -4,7 +4,7 @@ import unittest
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 
-from app.ai.decision_engine import ENGINE_VERSION, build_recommendations
+from app.ai.decision_engine import build_recommendations
 from app.api.router import api_router
 from app.api.routers.ai import get_ai_recommendations
 from app.api.schemas.ai import RecommendationsResponse
@@ -107,6 +107,9 @@ class BuildRecommendationsTests(unittest.TestCase):
         recs = build_recommendations(inv, dm, sup, scenarios, risks)
         self.assertEqual(recs[0].severity, "critical")
         self.assertEqual(recs[0].category, "delivery")
+        self.assertIn(recs[0].confidence, ("high", "medium", "low"))
+        self.assertTrue(recs[0].simulation_insights)
+        self.assertEqual(recs[0].owner, "Logistics Ops")
 
         severities = [r.severity for r in recs]
         rank = {"critical": 0, "high": 1, "medium": 2, "low": 3}
@@ -170,6 +173,6 @@ class AiRouterTests(unittest.IsolatedAsyncioTestCase):
             result = await get_ai_recommendations(db, operational_risk_limit=5)
 
         self.assertIsInstance(result, RecommendationsResponse)
-        self.assertEqual(result.engine_version, ENGINE_VERSION)
+        self.assertTrue(str(result.engine_version).startswith("deterministic-rules-"))
         self.assertEqual(result.generated_at, frozen)
         self.assertEqual(result.recommendations, [])

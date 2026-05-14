@@ -97,3 +97,42 @@ def test_compute_escalation_risk_contained() -> None:
 def test_kpi_mock_history_series_length_seven() -> None:
     s = _dash.kpi_mock_history_series("sla_breaches", 100.0)
     assert len(s) == 7 and abs(s[-1] - 100.0) < 1e-6
+
+
+def test_build_forecast_summary_includes_phase2_time_to_impact_and_confidence() -> None:
+    kpi_ctx = {
+        "worsening_domains": [],
+        "improving_domains": [],
+        "delta_rows": [],
+        "values": {},
+        "kpi_forecast": {
+            "sla_breaches": {"state": "stable", "caption": "stabilizing", "series": [], "sparkline_svg": ""},
+            "critical_inventory": {"state": "stable", "caption": "stabilizing", "series": [], "sparkline_svg": ""},
+            "high_risk_suppliers": {"state": "stable", "caption": "stabilizing", "series": [], "sparkline_svg": ""},
+            "critical_recommendations": {"state": "stable", "caption": "stabilizing", "series": [], "sparkline_svg": ""},
+        },
+    }
+    lines = _dash.build_forecast_summary(
+        kpi_ctx=kpi_ctx,
+        risk_items=None,
+        ai_payload={
+            "recommendations": [
+                {
+                    "confidence": "high",
+                    "time_to_impact": (
+                        "At current breach acceleration, SLA risk exceeds escalation threshold in ~3 days."
+                    ),
+                    "severity": "critical",
+                    "id": "delivery:sla_and_delays",
+                },
+                {"confidence": "medium", "severity": "high", "id": "inventory:low_stock"},
+            ]
+        },
+        critical_inventory=0,
+        sla_breaches=0,
+        high_risk_suppliers=0,
+        critical_recommendations=0,
+    )
+    joined = " ".join(lines)
+    assert "Cross-alert model confidence band" in joined
+    assert "At current breach acceleration" in joined

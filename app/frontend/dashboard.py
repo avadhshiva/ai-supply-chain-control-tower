@@ -301,6 +301,50 @@ def _ordinal_period(n: int) -> str:
     return {1: "first", 2: "second", 3: "third", 4: "fourth", 5: "fifth", 6: "sixth"}.get(n, f"{n}th")
 
 
+def _phase2_priority_time_to_impact(ai_payload: dict[str, Any] | None) -> str | None:
+    if not isinstance(ai_payload, dict):
+        return None
+    recs = [r for r in (ai_payload.get("recommendations") or []) if isinstance(r, dict)]
+    if not recs:
+        return None
+    sev_rank = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+    recs_sorted = sorted(
+        recs,
+        key=lambda r: (
+            sev_rank.get(_normalize_severity(str(r.get("severity", ""))), 9),
+            str(r.get("id", "")),
+        ),
+    )
+    for r in recs_sorted:
+        raw = r.get("time_to_impact")
+        if raw is None or str(raw).strip() == "":
+            continue
+        return str(raw).strip()
+    return None
+
+
+def _phase2_confidence_band_line(ai_payload: dict[str, Any] | None) -> str | None:
+    if not isinstance(ai_payload, dict):
+        return None
+    levels: list[str] = []
+    for r in ai_payload.get("recommendations") or []:
+        if not isinstance(r, dict):
+            continue
+        c = str(r.get("confidence") or "").strip().lower()
+        if c in ("high", "medium", "low"):
+            levels.append(c)
+    if not levels:
+        return None
+    rank = {"low": 0, "medium": 1, "high": 2}
+    lo = min(levels, key=lambda x: rank[x])
+    hi = max(levels, key=lambda x: rank[x])
+    if lo == hi:
+        band = lo.capitalize()
+    else:
+        band = f"{lo.capitalize()}–{hi.capitalize()}"
+    return f"Cross-alert model confidence band: {band}."
+
+
 def build_forecast_summary(
     *,
     kpi_ctx: dict[str, Any],
@@ -406,6 +450,13 @@ def build_forecast_summary(
     else:
         lines.append("Near-term operational pressure appears manageable if owners hold the current recovery tempo.")
 
+    tti_ln = _phase2_priority_time_to_impact(ai_payload)
+    if tti_ln:
+        lines.insert(0, tti_ln)
+    band_ln = _phase2_confidence_band_line(ai_payload)
+    if band_ln:
+        lines.append(band_ln)
+
     out: list[str] = []
     for ln in lines:
         s = str(ln).strip()
@@ -480,6 +531,8 @@ class EnrichedAlertContext(TypedDict, total=False):
     driver: str
     concentration_badge: str
     owner: str
+    target_window: str
+    escalation_trigger: str
 
 
 _ENRICH_DRIVER_MAP: dict[str, tuple[str, str]] = {
@@ -1101,12 +1154,20 @@ def enrich_alert_context(
             driver, owner = _ENRICH_DRIVER_MAP[dk]
             break
 
+    api_owner = str(alert.get("owner") or "").strip()
+    if api_owner:
+        owner = api_owner
+    target_window = str(alert.get("target_window") or "").strip()
+    escalation_trigger = str(alert.get("escalation_trigger") or "").strip()
+
     conc = dominant["pattern"]
 
     return {
         "driver": driver,
         "concentration_badge": conc,
         "owner": owner,
+        "target_window": target_window,
+        "escalation_trigger": escalation_trigger,
     }
 
 
@@ -1762,6 +1823,63 @@ def _enterprise_css() -> None:
             min-width: 0;
             align-items: flex-start;
             gap: 0.3rem;
+            flex-wrap: wrap;
+          }
+          .rec-conf {
+            flex: 0 0 auto;
+            font-size: 0.56rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            border-radius: 3px;
+            padding: 0.02rem 0.2rem;
+            line-height: 1.08;
+            margin-top: 0.02rem;
+          }
+          .rec-conf--high {
+            color: #14532d;
+            background: #dcfce7;
+            border: 1px solid rgba(22, 101, 52, 0.25);
+          }
+          .rec-conf--medium {
+            color: #7c2d12;
+            background: #ffedd5;
+            border: 1px solid rgba(194, 65, 12, 0.22);
+          }
+          .rec-conf--low {
+            color: #64748b;
+            background: #f1f5f9;
+            border: 1px solid rgba(148, 163, 184, 0.35);
+          }
+          .rec-tti {
+            font-size: 0.68rem;
+            color: #334155;
+            margin: 0 0 0.03rem 0;
+            line-height: 1.2;
+            font-weight: 500;
+          }
+          .rec-sim-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.12rem;
+            margin: 0.02rem 0 0.03rem 0;
+          }
+          .rec-sim-chip {
+            font-size: 0.595rem;
+            color: #475569;
+            background: rgba(226, 232, 240, 0.55);
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            border-radius: 3px;
+            padding: 0.03rem 0.22rem;
+            line-height: 1.15;
+            max-width: 100%;
+          }
+          .rec-causal-chain {
+            margin: 0.04rem 0 0.06rem 1rem;
+            padding: 0;
+            font-size: 0.68rem;
+            color: #475569;
+            line-height: 1.25;
           }
           .rec-title-inline {
             font-size: 0.93rem;
@@ -2831,6 +2949,54 @@ def _recommendation_evidence_body_html(r: dict[str, Any], actions_full: list[str
     if rationale:
         parts.append('<div class="rec-dl-label">Rationale</div>')
         parts.append(f"<p>{html.escape(str(rationale))}</p>")
+    ex = r.get("explainability")
+    if isinstance(ex, dict):
+        dom = str(ex.get("dominant_trigger_source") or "").strip()
+        if dom:
+            parts.append('<div class="rec-dl-label">Dominant trigger</div>')
+            parts.append(f'<p class="rec-signal">{html.escape(dom)}</p>')
+        chain = ex.get("causal_chain") or []
+        if isinstance(chain, list) and chain:
+            parts.append('<div class="rec-dl-label">Causal chain</div>')
+            parts.append('<ol class="rec-causal-chain">')
+            for step in chain:
+                if str(step).strip():
+                    parts.append(f"<li>{html.escape(str(step))}</li>")
+            parts.append("</ol>")
+        wcontrib = ex.get("weighted_contributors") or []
+        if isinstance(wcontrib, list) and wcontrib:
+            parts.append('<div class="rec-dl-label">Weighted contributors</div>')
+            for row in wcontrib:
+                if not isinstance(row, dict):
+                    continue
+                nm = str(row.get("name", ""))
+                wt = row.get("weight")
+                try:
+                    pct = int(round(float(wt) * 100)) if wt is not None else None
+                except (TypeError, ValueError):
+                    pct = None
+                if pct is not None:
+                    parts.append(
+                        f'<p class="rec-signal">{html.escape(nm)} — {pct}% of modeled driver weight</p>'
+                    )
+                else:
+                    parts.append(f'<p class="rec-signal">{html.escape(nm)}</p>')
+        kinf = ex.get("kpi_influences") or []
+        if isinstance(kinf, list) and kinf:
+            parts.append('<div class="rec-dl-label">KPI influence</div>')
+            for row in kinf:
+                if not isinstance(row, dict):
+                    continue
+                kid = str(row.get("kpi_id", ""))
+                ip = row.get("influence_pct")
+                try:
+                    ipf = float(ip) if ip is not None else None
+                except (TypeError, ValueError):
+                    ipf = None
+                if ipf is not None:
+                    parts.append(
+                        f'<p class="rec-signal">{html.escape(kid)} — {ipf:g}% of signal mix</p>'
+                    )
     if evidence:
         parts.append('<div class="rec-dl-label">Signals / evidence</div>')
         for ev in evidence:
@@ -2926,6 +3092,22 @@ def _ai_recommendations_panel(
             rp_short = "Localized"
         else:
             rp_short = "Distributed"
+        tw = str(ctx.get("target_window") or "").strip()
+        esc_api = str(ctx.get("escalation_trigger") or "").strip()
+        tw_seg = ""
+        if tw:
+            tw_seg = (
+                '<span class="rec-intel-sep">·</span>'
+                '<span class="rec-intel-k">Target</span>'
+                f'<span class="rec-intel-v">{html.escape(tw)}</span>'
+            )
+        esc_seg = ""
+        if esc_api:
+            esc_seg = (
+                '<span class="rec-intel-sep">·</span>'
+                '<span class="rec-intel-k">Escalate</span>'
+                f'<span class="rec-intel-v">{html.escape(esc_api)}</span>'
+            )
         intel_micro = (
             '<div class="rec-intel-micro" aria-label="Alert diagnosis">'
             '<span class="rec-intel-k">Driver</span>'
@@ -2936,6 +3118,7 @@ def _ai_recommendations_panel(
             '<span class="rec-intel-sep">·</span>'
             '<span class="rec-intel-k">Risk pattern</span>'
             f'<span class="rec-intel-v">{html.escape(rp_short)}</span>'
+            f"{tw_seg}{esc_seg}"
             "</div>"
         )
         chips_inner = "".join(f'<span class="rec-chip">{html.escape(b)}</span>' for b in badges)
@@ -2955,18 +3138,36 @@ def _ai_recommendations_panel(
         if idx == 0:
             pri_html = '<span class="rec-priority-pill">Top priority</span>'
         open_attr = " open" if idx == 0 else ""
+        conf_raw = str(r.get("confidence") or "").strip().lower()
+        conf_html = ""
+        if conf_raw in ("high", "medium", "low"):
+            conf_html = f'<span class="rec-conf rec-conf--{conf_raw}">{conf_raw.capitalize()} confidence</span>'
+        tti_html = ""
+        raw_tti = r.get("time_to_impact")
+        if raw_tti is not None and str(raw_tti).strip():
+            tti_html = f'<p class="rec-tti">{html.escape(str(raw_tti).strip())}</p>'
+        sims = r.get("simulation_insights") or []
+        sim_html = ""
+        if isinstance(sims, list) and sims:
+            shown = [str(s).strip() for s in sims[:2] if str(s).strip()]
+            if shown:
+                inner = "".join(f'<span class="rec-sim-chip">{html.escape(s)}</span>' for s in shown)
+                sim_html = f'<div class="rec-sim-row" aria-label="What-if simulations">{inner}</div>'
         blocks.append(
             f'<div class="rec-card{card_mod}">'
             f'<div class="rec-field-h">Issue</div>'
             f'<div class="rec-alert-top">'
             f'<div class="rec-alert-head">'
             f"{_severity_badge_markup(r.get('severity'))}"
+            f"{conf_html}"
             f'<p class="rec-title-inline">{title_e}</p>'
             f"</div>"
             f"{pri_html}"
             f"</div>"
             f'<div class="rec-field-h">Impact</div>'
             f'<p class="rec-impact">{summary_e}</p>'
+            f"{tti_html}"
+            f"{sim_html}"
             f"{intel_micro}"
             f"{chips_html}"
             f"{actions_block}"
