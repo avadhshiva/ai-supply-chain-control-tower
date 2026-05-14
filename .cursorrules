@@ -1,0 +1,51 @@
+You are building an enterprise AI-powered supply chain decision platform.
+
+STRICT RULES:
+- Follow modular monolith architecture
+- Use Python 3.12+
+- Use FastAPI for APIs
+- Use PostgreSQL for persistence
+- Use SQLAlchemy ORM
+- Use Pydantic v2 schemas
+- Use LangGraph for workflow orchestration
+- Use OpenAI APIs through service abstraction
+- Use async APIs wherever possible
+- Keep AI logic separate from business logic
+- Keep routers thin
+- Put business logic in services/
+- Put AI prompts in app/ai/prompts.py
+- Use structured logging
+- Add audit logging for workflow decisions
+- Prefer explicit typing
+- Avoid unnecessary abstractions
+- Avoid microservices
+- Avoid premature optimization
+- Avoid overengineering
+- Use environment variables for secrets
+- Use Docker-compatible setup
+- Write production-style but MVP-focused code
+- Follow existing project structure strictly
+- Never rewrite architecture unless explicitly requested
+
+Folder responsibilities:
+- routers/: FastAPI route handlers only
+- services/: business logic
+- ai/: LangGraph workflows, prompts, LLM integrations
+- models/: SQLAlchemy models
+- schemas/: request/response contracts
+- core/: config, DB, logging
+- frontend/: Streamlit dashboard
+
+Workflow requirements:
+- deterministic routing
+- human-in-the-loop escalation support
+- audit trails
+- retry-safe workflows
+- graceful error handling
+
+Code style:
+- concise
+- readable
+- enterprise-style
+- avoid unnecessary comments
+- avoid placeholder code unless requested

@@ -1,0 +1,201 @@
+supplier_id,supplier_name,reliability_score,avg_lead_time_days,on_time_delivery_rate,scenario_tag
+SUP-001,"Smith, Mercado and Hernandez",0.89,14,0.54,reliable
+SUP-002,"Abbott, Moore and Turner",0.71,20,0.99,new
+SUP-003,Pruitt-Rogers,0.71,12,0.81,critical
+SUP-004,Williams-Hurst,0.71,21,0.53,delayed
+SUP-005,Wong-Rodriguez,0.89,7,0.62,critical
+SUP-006,Davis-Olsen,0.57,11,0.63,delayed
+SUP-007,Morris-Jackson,0.74,27,0.79,reliable
+SUP-008,"Brown, Bowman and Sellers",0.87,16,0.8,reliable
+SUP-009,"Allen, Powell and Mccormick",0.51,17,0.61,new
+SUP-010,Brown-Taylor,0.51,30,0.77,delayed
+SUP-011,Dorsey LLC,0.74,19,0.8,critical
+SUP-012,Lewis PLC,0.65,23,0.83,reliable
+SUP-013,Watts Group,0.87,4,0.57,new
+SUP-014,Roberts LLC,0.72,6,0.78,new
+SUP-015,Robertson-Monroe,0.8,13,0.65,delayed
+SUP-016,Scott-Lee,0.55,29,0.86,reliable
+SUP-017,Fletcher LLC,0.86,21,0.53,new
+SUP-018,"Gibson, Carter and Torres",0.64,28,0.54,critical
+SUP-019,Pena-Martinez,0.66,22,0.94,reliable
+SUP-020,Brooks PLC,0.63,29,0.77,delayed
+SUP-021,Mills-Hernandez,0.85,19,0.75,new
+SUP-022,Rodgers-Davis,0.82,20,0.56,critical
+SUP-023,"Patterson, Waters and Howell",0.54,29,0.94,critical
+SUP-024,Washington-Wilson,0.93,5,0.79,critical
+SUP-025,Baldwin PLC,0.63,24,0.96,new
+SUP-026,Bailey-Dyer,0.97,25,0.68,critical
+SUP-027,Anthony and Sons,0.66,14,0.54,critical
+SUP-028,Phillips and Sons,0.99,22,0.93,new
+SUP-029,Rodriguez-Benitez,0.89,11,0.77,critical
+SUP-030,"Gray, Ibarra and Cohen",0.66,25,0.98,new
+SUP-031,Wells-Bishop,0.92,17,0.8,critical
+SUP-032,Lewis-Walker,0.51,21,0.64,new
+SUP-033,"Davis, Holt and Baker",0.9,20,0.56,delayed
+SUP-034,Nelson-Thompson,0.51,11,0.59,new
+SUP-035,Wise-Aguilar,0.77,26,0.65,critical
+SUP-036,Cooper-Merritt,0.9,14,0.94,delayed
+SUP-037,Lopez and Sons,0.58,2,0.88,new
+SUP-038,"Stewart, Parks and Morris",0.87,1,0.65,new
+SUP-039,Turner-Hahn,0.74,24,0.9,new
+SUP-040,Williams-Lopez,0.58,1,0.96,new
+SUP-041,Hughes-Alvarez,0.7,10,0.64,critical
+SUP-042,Williams-Elliott,0.77,4,0.76,critical
+SUP-043,"Miles, Brown and Johnson",0.97,1,1.0,delayed
+SUP-044,Boyer-Long,0.9,24,0.98,new
+SUP-045,"Miller, Thomas and Sims",0.72,11,0.58,reliable
+SUP-046,Brown-West,0.96,27,0.66,critical
+SUP-047,Crawford Group,0.61,10,0.62,reliable
+SUP-048,Rodriguez Ltd,0.55,6,0.73,delayed
+SUP-049,Thomas PLC,0.78,2,0.63,new
+SUP-050,Pierce-Evans,0.95,22,0.6,new
+SUP-051,"Taylor, Hess and Carpenter",0.61,2,0.99,critical
+SUP-052,Garcia LLC,0.68,19,0.92,new
+SUP-053,Nelson LLC,0.96,25,0.74,reliable
+SUP-054,Diaz Inc,1.0,15,0.87,critical
+SUP-055,Holloway-Mckenzie,0.89,2,0.73,critical
+SUP-056,Lloyd Group,0.94,6,0.53,reliable
+SUP-057,Melton-Castro,0.81,28,0.77,critical
+SUP-058,"Anderson, Walker and Perkins",1.0,23,0.91,critical
+SUP-059,"Vasquez, Collins and Thompson",0.89,26,0.87,reliable
+SUP-060,Garcia LLC,0.82,18,0.82,new
+SUP-061,"Cowan, Howard and Wheeler",0.72,6,0.58,critical
+SUP-062,"Aguirre, Mccoy and Miller",0.84,19,0.98,critical
+SUP-063,Johnson-Lane,0.8,13,0.84,delayed
+SUP-064,"Perez, Fisher and Rodriguez",0.9,10,0.6,new
+SUP-065,"Castillo, Lutz and Blanchard",0.6,1,0.6,critical
+SUP-066,Johnson Inc,0.67,2,0.6,delayed
+SUP-067,Blackwell-Long,0.6,19,0.8,reliable
+SUP-068,Riddle LLC,0.77,5,0.74,new
+SUP-069,"Powell, Ross and Mcguire",0.62,9,0.8,reliable
+SUP-070,Bass-Howard,0.57,13,0.9,reliable
+SUP-071,George Ltd,1.0,4,0.95,delayed
+SUP-072,Rogers-Randall,0.79,16,0.8,delayed
+SUP-073,Moore-Ellis,0.9,28,0.84,critical
+SUP-074,"Lucas, Wood and Byrd",0.99,8,0.9,new
+SUP-075,Gates LLC,0.91,16,0.82,new
+SUP-076,Morales Group,0.76,3,0.69,reliable
+SUP-077,Harrison-Skinner,0.61,5,0.81,critical
+SUP-078,"Murphy, Taylor and Vaughn",0.55,19,0.73,delayed
+SUP-079,Webb-Beck,0.5,9,0.87,reliable
+SUP-080,Baker LLC,0.96,26,0.81,reliable
+SUP-081,"Ramirez, Compton and Hardin",0.88,12,0.63,new
+SUP-082,"Gonzalez, Romero and Jones",0.7,5,0.83,delayed
+SUP-083,Romero-Gordon,0.97,3,0.94,delayed
+SUP-084,Nelson-Ellis,0.57,3,0.81,delayed
+SUP-085,Mitchell-Ramirez,0.73,28,0.76,new
+SUP-086,"Perez, Gaines and French",0.92,28,0.88,reliable
+SUP-087,"Pierce, Willis and Anderson",0.61,9,0.95,reliable
+SUP-088,Moore Group,0.58,28,0.8,delayed
+SUP-089,Ayers Group,0.59,8,0.52,reliable
+SUP-090,"Willis, Ellis and Mccarty",0.5,5,0.97,new
+SUP-091,Fox-Hodges,0.62,9,0.81,critical
+SUP-092,Welch-Ramirez,0.63,18,0.74,reliable
+SUP-093,Abbott-Taylor,0.72,2,0.82,delayed
+SUP-094,Brown LLC,0.63,17,0.64,new
+SUP-095,"Hernandez, Anderson and Stanley",0.64,28,0.91,reliable
+SUP-096,West Ltd,0.83,17,0.8,critical
+SUP-097,"Evans, Villarreal and Morales",0.72,12,0.75,delayed
+SUP-098,"Malone, Fields and House",0.78,25,0.57,reliable
+SUP-099,"York, Harmon and Brewer",0.58,11,0.87,critical
+SUP-100,"Cooper, Richardson and Arnold",0.74,12,0.87,delayed
+SUP-101,"Wilson, Johnson and Hernandez",0.86,30,0.89,critical
+SUP-102,"Davis, Brown and Lara",0.6,8,0.56,delayed
+SUP-103,Gonzales LLC,0.98,25,0.94,delayed
+SUP-104,Fuller-Hernandez,0.62,26,0.61,reliable
+SUP-105,"Webb, Patel and Mueller",0.97,16,0.6,critical
+SUP-106,"Ortiz, Kim and Tanner",0.86,27,0.88,new
+SUP-107,Mills-Smith,0.53,14,0.5,critical
+SUP-108,Rogers Ltd,0.7,13,0.57,delayed
+SUP-109,"Henry, Bell and Goodman",0.86,19,0.94,new
+SUP-110,"Johnson, Mcclure and Smith",0.56,8,0.84,new
+SUP-111,Wise-Curtis,0.98,30,0.95,new
+SUP-112,Armstrong PLC,0.84,13,0.64,new
+SUP-113,Snow PLC,0.61,5,0.9,reliable
+SUP-114,Fowler-Meyers,0.82,24,0.77,new
+SUP-115,"Franklin, Dickerson and Anderson",0.75,25,0.84,delayed
+SUP-116,"Grant, Sanders and Palmer",1.0,8,0.61,delayed
+SUP-117,Figueroa and Sons,0.75,13,0.61,critical
+SUP-118,Perry-Nielsen,0.65,22,0.62,critical
+SUP-119,Fitzpatrick-Macias,0.63,3,0.96,reliable
+SUP-120,Cardenas Ltd,0.84,9,0.65,reliable
+SUP-121,Rivera LLC,0.64,28,0.56,critical
+SUP-122,Leon Group,0.99,18,0.81,new
+SUP-123,Fowler-Williams,0.84,8,0.51,critical
+SUP-124,"Adams, Wilkinson and Lewis",0.92,5,0.69,critical
+SUP-125,"Hudson, Daniels and Dixon",0.74,17,0.94,reliable
+SUP-126,"Lee, Johnson and Smith",0.77,23,0.91,reliable
+SUP-127,Lopez-Edwards,0.94,1,0.66,delayed
+SUP-128,Edwards Ltd,0.86,24,0.93,new
+SUP-129,"Garcia, Hale and May",0.66,28,0.96,reliable
+SUP-130,Fitzpatrick-Hunt,0.64,13,0.85,delayed
+SUP-131,Myers-Watts,0.84,21,0.63,delayed
+SUP-132,Vega-Mccullough,0.53,21,0.77,new
+SUP-133,"Sanchez, Copeland and Wood",0.67,11,1.0,delayed
+SUP-134,Li-Copeland,0.96,25,0.61,critical
+SUP-135,Griffin-Cunningham,0.61,5,0.59,critical
+SUP-136,"Hull, Evans and Cole",0.96,1,0.75,delayed
+SUP-137,Gomez PLC,0.78,21,0.96,reliable
+SUP-138,Moody-Proctor,0.54,17,0.69,new
+SUP-139,Brown Inc,0.5,6,0.79,reliable
+SUP-140,"Walker, Martin and Smith",0.76,24,0.79,reliable
+SUP-141,Bryant-Sutton,0.54,19,0.73,delayed
+SUP-142,Marshall-Schmidt,0.96,15,1.0,new
+SUP-143,Hanson and Sons,0.83,21,0.97,reliable
+SUP-144,"Watkins, Lee and Martin",0.99,2,0.8,new
+SUP-145,"Lane, Daniels and Brown",0.96,4,0.82,reliable
+SUP-146,"Burns, Hunter and Fisher",0.76,25,0.74,new
+SUP-147,"Bowman, Jackson and Robles",0.88,6,1.0,reliable
+SUP-148,Turner Inc,0.54,2,0.53,critical
+SUP-149,Velasquez PLC,0.77,24,0.52,reliable
+SUP-150,Phillips PLC,0.6,15,0.77,new
+SUP-151,"Patton, Warren and Peterson",0.95,9,0.91,reliable
+SUP-152,"Peterson, Lewis and Brown",0.73,8,0.53,delayed
+SUP-153,Powell-Mosley,0.63,19,0.87,reliable
+SUP-154,Taylor Ltd,0.53,19,0.84,delayed
+SUP-155,Mendoza-Miller,0.74,23,0.87,new
+SUP-156,Sexton-Johnson,0.97,17,0.92,new
+SUP-157,Moreno Inc,0.61,17,0.53,critical
+SUP-158,"Hubbard, Cooper and Jackson",0.54,26,0.57,delayed
+SUP-159,Koch PLC,0.85,14,0.82,delayed
+SUP-160,Joseph and Sons,0.79,4,0.94,reliable
+SUP-161,Bernard LLC,0.94,20,0.52,critical
+SUP-162,"Sanchez, Murphy and Harris",0.91,20,0.81,critical
+SUP-163,West-Conner,0.91,14,0.55,delayed
+SUP-164,Mason Inc,0.71,1,0.93,delayed
+SUP-165,Nelson and Sons,0.92,14,0.74,delayed
+SUP-166,"Schultz, Jackson and Chen",0.92,3,0.84,delayed
+SUP-167,Brown-Walker,0.63,27,0.52,reliable
+SUP-168,"Mccarty, Raymond and Howard",0.79,18,0.6,new
+SUP-169,"Higgins, Pruitt and Miller",0.69,10,0.53,new
+SUP-170,Hammond-Deleon,0.79,20,0.84,delayed
+SUP-171,"Reid, Rich and Jackson",0.93,2,0.7,delayed
+SUP-172,"Taylor, Lester and Hill",0.67,6,0.74,delayed
+SUP-173,Casey Group,0.8,15,0.91,critical
+SUP-174,Elliott-Vasquez,0.91,15,0.82,delayed
+SUP-175,"Brown, Jones and Anderson",0.89,7,0.77,critical
+SUP-176,"Powers, Wise and Brown",0.61,28,0.65,reliable
+SUP-177,"Frazier, Turner and Payne",0.74,15,0.74,critical
+SUP-178,"Combs, Oneill and Werner",0.86,17,0.82,delayed
+SUP-179,"Hoffman, Hudson and Garcia",0.76,20,0.96,new
+SUP-180,Maddox Group,0.53,9,0.8,delayed
+SUP-181,Hunt PLC,1.0,8,0.91,critical
+SUP-182,Franklin-Jenkins,0.66,1,0.88,critical
+SUP-183,Brown LLC,0.75,15,0.54,delayed
+SUP-184,Chan-Davis,0.5,23,0.92,critical
+SUP-185,Rivera-Parks,0.91,17,0.83,reliable
+SUP-186,Green-Graham,0.68,18,0.96,new
+SUP-187,Terry-Case,0.65,27,0.63,reliable
+SUP-188,Hernandez-Gonzalez,0.75,25,0.85,delayed
+SUP-189,"Savage, Holloway and Ellis",0.76,25,0.68,delayed
+SUP-190,Smith and Sons,0.98,14,0.94,new
+SUP-191,Duncan and Sons,0.87,29,0.82,critical
+SUP-192,"Nash, Spence and Gonzales",0.87,6,0.76,critical
+SUP-193,"Bass, Jones and Johnson",0.72,13,0.68,critical
+SUP-194,Pace PLC,0.76,20,0.97,reliable
+SUP-195,Hanson Ltd,0.97,21,0.54,delayed
+SUP-196,Jones-Riley,0.91,22,0.87,new
+SUP-197,Wilson-Mitchell,0.76,10,0.93,reliable
+SUP-198,Jones-Trevino,0.65,5,0.59,reliable
+SUP-199,Mcclure and Sons,0.56,8,0.64,critical
+SUP-200,"Glenn, Meyer and Martin",0.72,13,0.51,delayed
