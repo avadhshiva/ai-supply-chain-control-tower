@@ -14,6 +14,32 @@ import httpx
 import pandas as pd
 import streamlit as st
 
+from app.frontend.dashboard_filters import (
+    DashboardFilterState,
+    default_filter_state,
+    dependency_payload_matches_filters,
+    discover_drill_targets,
+    extract_filter_options,
+    filter_ai_payload,
+    filter_risk_items,
+    filter_scenario_distribution,
+    filters_are_active,
+)
+from app.frontend.dashboard_graphs import (
+    build_altair_trend_chart,
+    build_dependency_graph_from_payload,
+    build_plotly_dependency_graph,
+    build_plotly_trend_figure,
+    operational_pressure_series,
+)
+from app.frontend.dashboard_ui import (
+    build_entity_drilldown_context,
+    inject_dashboard_ux_css,
+    render_drilldown_selector,
+    render_entity_drilldown_panel,
+    render_filters_active_banner,
+)
+
 # Allow `streamlit run app/frontend/dashboard.py` from repo root without PYTHONPATH hacks
 _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if _REPO_ROOT not in sys.path:
@@ -3408,6 +3434,173 @@ def _dependency_intelligence_panel(payload: dict[str, Any] | None) -> None:
     st.markdown(build_dependency_intelligence_panel_html(payload), unsafe_allow_html=True)
 
 
+def _fetch_dashboard_payloads(client: httpx.Client) -> tuple[dict[str, Any], list[str]]:
+    """Load all dashboard API payloads in one client session."""
+    errors: list[str] = []
+    cache: dict[str, Any] = {}
+
+    def _load(key: str, path: str) -> None:
+        data, err = _fetch_json(client, path)
+        cache[key] = data
+        if err:
+            errors.append(err)
+
+    _load("inv", "/analytics/inventory-risk-summary")
+    _load("deliv", "/analytics/delayed-delivery-summary")
+    _load("sup", "/analytics/supplier-reliability-overview")
+    _load("risks", "/analytics/top-operational-risks?limit=20")
+    _load("scenarios", "/analytics/scenario-tag-distribution")
+    _load("ai", "/ai/recommendations?operational_risk_limit=15")
+    _load("recovery", "/ai/recovery-scenarios")
+    _load("dependency", "/ai/dependency-analysis?operational_risk_limit=20")
+    return cache, errors
+
+
+def _get_cached_dashboard_payloads() -> tuple[dict[str, Any], list[str]]:
+    if st.session_state.pop("dash_force_refresh", False):
+        st.session_state.pop("dash_api_cache", None)
+        st.session_state.pop("dash_fetch_errors", None)
+    if "dash_api_cache" not in st.session_state:
+        timeout = float(os.environ.get("SUPPLY_CHAIN_API_TIMEOUT", "30"))
+        with httpx.Client(timeout=timeout) as client:
+            cache, errors = _fetch_dashboard_payloads(client)
+        st.session_state["dash_api_cache"] = cache
+        st.session_state["dash_fetch_errors"] = errors
+    return st.session_state["dash_api_cache"], list(st.session_state.get("dash_fetch_errors") or [])
+
+
+def _render_sidebar_filters(filter_options: dict[str, list[str]]) -> DashboardFilterState:
+    filters = default_filter_state()
+    with st.sidebar:
+        st.header("Filters")
+        filters["severity"] = st.selectbox(
+            "Severity",
+            filter_options.get("severities", ["All"]),
+            key="dash_filter_severity",
+        )
+        filters["domain"] = st.selectbox(
+            "Domain",
+            filter_options.get("domains", ["All"]),
+            key="dash_filter_domain",
+        )
+        filters["supplier"] = st.selectbox(
+            "Supplier",
+            filter_options.get("suppliers", ["All"]),
+            key="dash_filter_supplier",
+        )
+        filters["route"] = st.selectbox(
+            "Route",
+            filter_options.get("routes", ["All"]),
+            key="dash_filter_route",
+        )
+        filters["scenario_type"] = st.selectbox(
+            "Scenario type",
+            filter_options.get("scenario_types", ["All"]),
+            key="dash_filter_scenario",
+        )
+        if st.button("Reset filters", use_container_width=True):
+            for key in (
+                "dash_filter_severity",
+                "dash_filter_domain",
+                "dash_filter_supplier",
+                "dash_filter_route",
+                "dash_filter_scenario",
+            ):
+                st.session_state.pop(key, None)
+            st.rerun()
+    return filters
+
+
+def _filter_summary(filters: DashboardFilterState) -> str:
+    parts = [f"{k}={v}" for k, v in filters.items() if v and v != "All"]
+    return ", ".join(parts) if parts else "none"
+
+
+def _trend_charts_row(
+    *,
+    kpi_ctx: dict[str, Any],
+    sla_breaches: int | None,
+    critical_inventory: int | None,
+    high_risk_suppliers: int | None,
+    critical_recommendations: int | None,
+    supplier_overview: dict[str, Any] | None,
+) -> None:
+    _section_head("Operational trends", variant="soft")
+    forecast = kpi_ctx.get("kpi_forecast") or {}
+    avg_rel = None
+    if isinstance(supplier_overview, dict):
+        raw = supplier_overview.get("avg_reliability_score")
+        if raw is not None and not _is_non_numeric_scalar(raw):
+            avg_rel = float(raw)
+
+    series_map: list[tuple[str, list[float], str]] = [
+        (
+            "SLA breach trend",
+            (forecast.get("sla_breaches") or {}).get("series")
+            or kpi_mock_history_series("sla_breaches", sla_breaches),
+            "#b91c1c",
+        ),
+        (
+            "Supplier reliability trend",
+            kpi_mock_history_series(
+                "high_risk_suppliers",
+                int((avg_rel or 0.72) * 100) if avg_rel is not None else high_risk_suppliers,
+            ),
+            "#0f766e",
+        ),
+        (
+            "Inventory exposure trend",
+            (forecast.get("critical_inventory") or {}).get("series")
+            or kpi_mock_history_series("critical_inventory", critical_inventory),
+            "#0f172a",
+        ),
+        (
+            "Operational pressure trend",
+            operational_pressure_series(
+                sla_breaches=sla_breaches,
+                critical_inventory=critical_inventory,
+                high_risk_suppliers=high_risk_suppliers,
+                critical_recommendations=critical_recommendations,
+            ),
+            "#7c3aed",
+        ),
+    ]
+    cols = st.columns(2, gap="small")
+    for idx, (title, series, color) in enumerate(series_map):
+        if not series:
+            continue
+        with cols[idx % 2]:
+            st.markdown('<div class="dash-trend-shell">', unsafe_allow_html=True)
+            fig = build_plotly_trend_figure(series, title=title, color=color)
+            if fig is not None:
+                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+            else:
+                st.altair_chart(
+                    build_altair_trend_chart(series, title=title, color=color),
+                    use_container_width=True,
+                )
+            st.markdown("</div>", unsafe_allow_html=True)
+
+
+def _dependency_network_panel(payload: dict[str, Any] | None) -> None:
+    _section_head("Dependency network", variant="soft", compact=True)
+    nodes, edges = build_dependency_graph_from_payload(payload)
+    if not nodes:
+        st.caption("No dependency graph data available.")
+        return
+    st.markdown('<div class="dash-graph-shell">', unsafe_allow_html=True)
+    fig = build_plotly_dependency_graph(nodes, edges)
+    if fig is not None:
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    else:
+        rows = [
+            {"source": e.get("source"), "target": e.get("target"), "label": e.get("label")}
+            for e in edges
+        ]
+        st.dataframe(rows, use_container_width=True, hide_index=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
 def _scenario_distribution_chart(dist: dict[str, Any] | None) -> None:
     _section_head("Scenario mix (preview)", variant="soft")
     if not dist or not dist.get("items"):
@@ -3551,9 +3744,10 @@ def main() -> None:
         page_title="Supply Chain AI — Executive",
         page_icon="",
         layout="wide",
-        initial_sidebar_state="collapsed",
+        initial_sidebar_state="expanded",
     )
     _enterprise_css()
+    inject_dashboard_ux_css()
 
     with st.sidebar:
         st.header("Connection")
@@ -3561,57 +3755,42 @@ def main() -> None:
         if api_override.strip():
             os.environ["SUPPLY_CHAIN_API_BASE"] = api_override.strip().rstrip("/")
         st.caption("Set SUPPLY_CHAIN_API_BASE in the environment to default this value.")
+        if st.button("Refresh data", use_container_width=True):
+            st.session_state["dash_force_refresh"] = True
+            st.rerun()
 
-    errors: list[str] = []
-    timeout = float(os.environ.get("SUPPLY_CHAIN_API_TIMEOUT", "30"))
+    cache, errors = _get_cached_dashboard_payloads()
+    inv = cache.get("inv")
+    deliv = cache.get("deliv")
+    sup = cache.get("sup")
+    risks_payload = cache.get("risks")
+    scenarios = cache.get("scenarios")
+    ai = cache.get("ai")
+    recovery = cache.get("recovery")
+    dependency = cache.get("dependency")
 
-    inv: Any | None = None
-    deliv: Any | None = None
-    sup: Any | None = None
-    risks_payload: Any | None = None
-    scenarios: Any | None = None
-    ai: Any | None = None
-    recovery: Any | None = None
-    dependency: Any | None = None
+    risk_items_raw = risks_payload.get("items") if isinstance(risks_payload, dict) else None
+    risk_list_raw = risk_items_raw if isinstance(risk_items_raw, list) else None
+    ai_raw = ai if isinstance(ai, dict) else None
+    scenarios_raw = scenarios if isinstance(scenarios, dict) else None
+    dependency_raw = coerce_dependency_analysis_payload(dependency)
 
-    with httpx.Client(timeout=timeout) as client:
-        inv, e = _fetch_json(client, "/analytics/inventory-risk-summary")
-        if e:
-            errors.append(e)
+    filter_options = extract_filter_options(
+        risk_items=risk_list_raw,
+        ai_payload=ai_raw,
+        scenarios=scenarios_raw,
+    )
+    filters = _render_sidebar_filters(filter_options)
 
-        deliv, e = _fetch_json(client, "/analytics/delayed-delivery-summary")
-        if e:
-            errors.append(e)
-
-        sup, e = _fetch_json(client, "/analytics/supplier-reliability-overview")
-        if e:
-            errors.append(e)
-
-        risks_payload, e = _fetch_json(client, "/analytics/top-operational-risks?limit=20")
-        if e:
-            errors.append(e)
-
-        scenarios, e = _fetch_json(client, "/analytics/scenario-tag-distribution")
-        if e:
-            errors.append(e)
-
-        ai, e = _fetch_json(client, "/ai/recommendations?operational_risk_limit=15")
-        if e:
-            errors.append(e)
-
-        recovery, e = _fetch_json(client, "/ai/recovery-scenarios")
-        if e:
-            errors.append(e)
-
-        dependency, e = _fetch_json(client, "/ai/dependency-analysis?operational_risk_limit=20")
-        if e:
-            errors.append(e)
+    risk_list = filter_risk_items(risk_list_raw, filters)
+    ai_filtered = filter_ai_payload(ai_raw, filters)
+    scenarios_filtered = filter_scenario_distribution(scenarios_raw, filters)
 
     last_updated = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     head_left, head_right = st.columns((3.2, 0.8), gap="small")
     with head_left:
         st.title("Supply chain command center")
-        st.caption("KPIs · operational risk · AI alerts · scenario mix — executive view.")
+        st.caption("KPIs · operational risk · AI alerts · dependency intelligence — executive view.")
     with head_right:
         st.markdown(
             f'<p class="exec-header-meta"><strong>Last updated</strong><br/>{html.escape(last_updated)}</p>',
@@ -3622,17 +3801,16 @@ def main() -> None:
         for msg in errors:
             st.error(msg)
 
+    render_filters_active_banner(filters_are_active(filters), _filter_summary(filters))
+
     critical_inv = int(inv["critical_items"]) if isinstance(inv, dict) and "critical_items" in inv else None
     sla = int(deliv["sla_breaches"]) if isinstance(deliv, dict) and "sla_breaches" in deliv else None
     high_risk = int(sup["high_risk_suppliers"]) if isinstance(sup, dict) and "high_risk_suppliers" in sup else None
 
     crit_recs: int | None = None
-    if isinstance(ai, dict):
-        recs = ai.get("recommendations") or []
+    if isinstance(ai_filtered, dict):
+        recs = ai_filtered.get("recommendations") or []
         crit_recs = sum(1 for r in recs if isinstance(r, dict) and r.get("severity") == "critical")
-
-    risk_items = risks_payload.get("items") if isinstance(risks_payload, dict) else None
-    risk_list = risk_items if isinstance(risk_items, list) else None
 
     kpi_ctx = _build_kpi_exec_context(
         critical_inventory=critical_inv,
@@ -3643,7 +3821,7 @@ def main() -> None:
 
     intel_bundle = build_intel_bundle(
         risk_items=risk_list,
-        ai_payload=ai if isinstance(ai, dict) else None,
+        ai_payload=ai_filtered,
         kpi_ctx=kpi_ctx,
         critical_inventory=critical_inv,
         sla_breaches=sla,
@@ -3661,6 +3839,15 @@ def main() -> None:
         critical_recommendations=crit_recs,
     )
 
+    _trend_charts_row(
+        kpi_ctx=kpi_ctx,
+        sla_breaches=sla,
+        critical_inventory=critical_inv,
+        high_risk_suppliers=high_risk,
+        critical_recommendations=crit_recs,
+        supplier_overview=sup if isinstance(sup, dict) else None,
+    )
+
     _executive_narrative_banner(
         kpi_ctx=kpi_ctx,
         critical_inventory=critical_inv,
@@ -3668,23 +3855,43 @@ def main() -> None:
         high_risk_suppliers=high_risk,
         critical_recommendations=crit_recs,
         risk_items=risk_list,
-        ai_payload=ai if isinstance(ai, dict) else None,
+        ai_payload=ai_filtered,
         intel_bundle=intel_bundle,
     )
+
+    drill_targets = discover_drill_targets(
+        risk_items=risk_list_raw,
+        ai_payload=ai_raw,
+        dependency=dependency_raw,
+    )
+    selected_entity = render_drilldown_selector(drill_targets)
+    if selected_entity:
+        drill_ctx = build_entity_drilldown_context(
+            selected_entity,
+            risk_items=risk_list_raw,
+            ai_payload=ai_raw,
+            dependency=dependency_raw,
+            intel_bundle=intel_bundle,
+        )
+        render_entity_drilldown_panel(drill_ctx)
 
     _operational_risks_table(risk_list, intel_bundle=intel_bundle)
 
     _ai_recommendations_panel(
-        ai if isinstance(ai, dict) else None,
+        ai_filtered,
         kpi_context=kpi_ctx,
         intel_bundle=intel_bundle,
     )
 
     _recovery_scenarios_panel(recovery if isinstance(recovery, dict) else None)
 
-    _dependency_intelligence_panel(coerce_dependency_analysis_payload(dependency))
+    if dependency_payload_matches_filters(dependency_raw, filters):
+        _dependency_intelligence_panel(dependency_raw)
+        _dependency_network_panel(dependency_raw)
+    else:
+        st.caption("Dependency intelligence hidden by active filters.")
 
-    _scenario_distribution_chart(scenarios if isinstance(scenarios, dict) else None)
+    _scenario_distribution_chart(scenarios_filtered)
 
 
 if __name__ == "__main__":

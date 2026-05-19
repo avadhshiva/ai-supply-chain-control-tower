@@ -253,11 +253,12 @@ class DependencyDashboardWiringTests(unittest.TestCase):
 
     def test_main_fetches_dependency_before_panel_render(self) -> None:
         main_src = inspect.getsource(dashboard.main)
-        fetch_at = main_src.index('dependency, e = _fetch_json(client, "/ai/dependency-analysis')
+        fetch_src = inspect.getsource(dashboard._fetch_dashboard_payloads)
+        self.assertIn('"/ai/dependency-analysis', fetch_src)
+        self.assertIn("_get_cached_dashboard_payloads()", main_src)
+        coerce_at = main_src.index("dependency_raw = coerce_dependency_analysis_payload")
         panel_at = main_src.index("_dependency_intelligence_panel(")
-        self.assertLess(fetch_at, panel_at)
-        self.assertIn("dependency: Any | None = None", main_src)
-        self.assertIn("coerce_dependency_analysis_payload(dependency)", main_src)
+        self.assertLess(coerce_at, panel_at)
 
     def test_dependency_panel_is_render_only(self) -> None:
         panel_src = inspect.getsource(dashboard._dependency_intelligence_panel)
