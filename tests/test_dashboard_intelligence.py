@@ -5,11 +5,13 @@ import unittest
 from app.frontend.dashboard import (
     build_action_panel,
     build_intel_bundle,
+    build_recovery_scenarios_panel_html,
     concentration_score,
     dominant_entity_detection,
     infer_root_causes,
     merge_executive_narrative_lines,
     prioritize_actions,
+    recovery_confidence_label,
 )
 
 
@@ -169,6 +171,102 @@ class IntelBundleTests(unittest.TestCase):
         self.assertIn("dominant", bundle)
         self.assertIn("prioritized_actions", bundle)
         self.assertIsInstance(bundle["concentration_index"], float)
+
+
+class RecoveryScenariosPanelTests(unittest.TestCase):
+    def test_confidence_label_thresholds(self) -> None:
+        self.assertEqual(recovery_confidence_label(0.85), "High")
+        self.assertEqual(recovery_confidence_label(0.55), "Medium")
+        self.assertEqual(recovery_confidence_label(0.2), "Low")
+
+    def test_build_recovery_panel_renders_three_cards(self) -> None:
+        payload = {
+            "engine_version": "deterministic-recovery-v1",
+            "strategies": [
+                {
+                    "kind": "conservative",
+                    "title": "Conservative stabilization",
+                    "operational_assumptions": ["Assume lane cap 40%."],
+                    "projected_improvements": {
+                        "breach_reduction": 1.0,
+                        "delay_reduction": 2.0,
+                        "supplier_risk_reduction": 0.5,
+                        "delivery_improvement": 0.1,
+                        "stockout_reduction": 1.0,
+                        "service_level_stabilization": 0.8,
+                    },
+                    "recovery_horizon_days": 12,
+                    "confidence": 0.72,
+                    "operational_tradeoff_note": "Lower disruption.",
+                },
+                {
+                    "kind": "balanced",
+                    "title": "Balanced recovery plan",
+                    "operational_assumptions": ["Balanced lane intervention."],
+                    "projected_improvements": {
+                        "breach_reduction": 2.0,
+                        "delay_reduction": 3.0,
+                        "supplier_risk_reduction": 1.0,
+                        "delivery_improvement": 0.2,
+                        "stockout_reduction": 2.0,
+                        "service_level_stabilization": 0.85,
+                    },
+                    "recovery_horizon_days": 10,
+                    "confidence": 0.78,
+                    "operational_tradeoff_note": "Coordinated owners.",
+                },
+                {
+                    "kind": "aggressive",
+                    "title": "Aggressive recovery push",
+                    "operational_assumptions": ["Max intervention."],
+                    "projected_improvements": {
+                        "breach_reduction": 3.0,
+                        "delay_reduction": 4.0,
+                        "supplier_risk_reduction": 1.5,
+                        "delivery_improvement": 0.25,
+                        "stockout_reduction": 3.0,
+                        "service_level_stabilization": 0.9,
+                    },
+                    "recovery_horizon_days": 8,
+                    "confidence": 0.68,
+                    "operational_tradeoff_note": "Higher cost.",
+                },
+            ],
+        }
+        html_out = build_recovery_scenarios_panel_html(payload)
+        self.assertIn("recovery-card--conservative", html_out)
+        self.assertIn("recovery-card--balanced", html_out)
+        self.assertIn("recovery-card--aggressive", html_out)
+        self.assertIn("High confidence", html_out)
+        self.assertIn("12d horizon", html_out)
+        self.assertIn("Lower disruption.", html_out)
+
+    def test_build_recovery_panel_escapes_html(self) -> None:
+        html_out = build_recovery_scenarios_panel_html(
+            {
+                "strategies": [
+                    {
+                        "kind": "balanced",
+                        "title": "Test <script>",
+                        "operational_assumptions": ['Lane <b>"A"</b>'],
+                        "projected_improvements": {
+                            "breach_reduction": 0,
+                            "delay_reduction": 0,
+                            "supplier_risk_reduction": 0,
+                            "delivery_improvement": 0,
+                            "stockout_reduction": 0,
+                            "service_level_stabilization": 0.5,
+                        },
+                        "recovery_horizon_days": 5,
+                        "confidence": 0.5,
+                        "operational_tradeoff_note": "Tradeoff & cost",
+                    }
+                ]
+            }
+        )
+        self.assertIn("&lt;script&gt;", html_out)
+        self.assertNotIn("<script>", html_out)
+        self.assertIn("Tradeoff &amp; cost", html_out)
 
 
 class NarrativeMergeTests(unittest.TestCase):

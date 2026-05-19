@@ -79,11 +79,30 @@ configure_logging()
 logger = logging.getLogger(__name__)
 
 
+def _registered_route_paths(application: FastAPI) -> list[str]:
+    paths: list[str] = []
+    for route in application.routes:
+        path = getattr(route, "path", None)
+        if path is None:
+            continue
+        methods = getattr(route, "methods", None)
+        if methods:
+            paths.append(f"{sorted(methods)} {path}")
+        else:
+            paths.append(path)
+    return sorted(paths)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    route_paths = _registered_route_paths(_app)
     logger.info(
         "app_startup",
-        extra={"app_name": settings.app_name, "environment": settings.environment},
+        extra={
+            "app_name": settings.app_name,
+            "environment": settings.environment,
+            "registered_routes": route_paths,
+        },
     )
     yield
     await dispose_engine()

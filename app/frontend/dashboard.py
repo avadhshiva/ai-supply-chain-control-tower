@@ -43,6 +43,14 @@ def _fetch_json(client: httpx.Client, path: str) -> tuple[Any | None, str | None
         return None, f"{url}: {e}"
 
 
+def _engine_version_meta(payload: dict[str, Any] | None) -> str | None:
+    """Section meta label from API payload (engine_version already includes v-prefix when needed)."""
+    if payload is None:
+        return None
+    version = str(payload.get("engine_version") or "").strip()
+    return version or None
+
+
 class DeltaResult(TypedDict):
     delta_pct: float | None
     direction: Literal["up", "down", "flat"]
@@ -1042,6 +1050,225 @@ def build_action_panel(actions: list[PrioritizedAction]) -> str:
         '<div class="exec-pa" role="region" aria-label="Priority actions">'
         '<div class="exec-pa-head">Priority actions</div>'
         f'<div class="exec-pa-stack">{"".join(rows)}</div>'
+        "</div>"
+    )
+
+
+_RECOVERY_KIND_LABELS: dict[str, str] = {
+    "conservative": "Conservative",
+    "balanced": "Balanced",
+    "aggressive": "Aggressive",
+}
+
+
+def recovery_confidence_label(confidence: float) -> str:
+    """Map aggregate scenario confidence to executive chip text."""
+    if confidence >= 0.70:
+        return "High"
+    if confidence >= 0.40:
+        return "Medium"
+    return "Low"
+
+
+def build_recovery_scenarios_panel_html(payload: dict[str, Any] | None) -> str:
+    """Compact horizontal executive cards for deterministic recovery scenarios."""
+    if not payload:
+        return ""
+    strategies = [s for s in (payload.get("strategies") or []) if isinstance(s, dict)]
+    if not strategies:
+        return ""
+    cards: list[str] = []
+    for strategy in strategies:
+        kind = str(strategy.get("kind", ""))
+        label = _RECOVERY_KIND_LABELS.get(kind, kind.title() or "Scenario")
+        title = html.escape(str(strategy.get("title", label)))
+        imp = strategy.get("projected_improvements") if isinstance(strategy.get("projected_improvements"), dict) else {}
+        horizon = int(strategy.get("recovery_horizon_days") or 0)
+        confidence = float(strategy.get("confidence") or 0.0)
+        conf_lbl = recovery_confidence_label(confidence)
+        tradeoff = html.escape(str(strategy.get("operational_tradeoff_note", "")))
+        assumptions = strategy.get("operational_assumptions") or []
+        assumption_line = ""
+        if assumptions and isinstance(assumptions[0], str):
+            assumption_line = html.escape(assumptions[0])
+        improvements = (
+            f"Breaches −{float(imp.get('breach_reduction', 0)):.1f} · "
+            f"Delays −{float(imp.get('delay_reduction', 0)):.1f} · "
+            f"Supplier −{float(imp.get('supplier_risk_reduction', 0)):.1f} · "
+            f"Stockouts −{float(imp.get('stockout_reduction', 0)):.1f} · "
+            f"Svc {float(imp.get('service_level_stabilization', 0)) * 100:.0f}%"
+        )
+        kind_cls = kind if kind in _RECOVERY_KIND_LABELS else "balanced"
+        cards.append(
+            f'<div class="recovery-card recovery-card--{html.escape(kind_cls)}">'
+            f'<div class="recovery-card-head">'
+            f'<span class="recovery-kind">{html.escape(label)}</span>'
+            f'<span class="recovery-title">{title}</span>'
+            "</div>"
+            f'<p class="recovery-metrics">{html.escape(improvements)}</p>'
+            f'<div class="recovery-chips">'
+            f'<span class="recovery-chip recovery-chip--conf">{html.escape(conf_lbl)} confidence</span>'
+            f'<span class="recovery-chip recovery-chip--horizon">{horizon}d horizon</span>'
+            "</div>"
+            f'<p class="recovery-tradeoff">{tradeoff}</p>'
+            + (f'<p class="recovery-assumption">{assumption_line}</p>' if assumption_line else "")
+            + "</div>"
+        )
+    return (
+        '<div class="recovery-panel-wrap" role="region" aria-label="Recovery scenarios">'
+        f'<div class="recovery-row">{"".join(cards)}</div>'
+        "</div>"
+    )
+
+
+def _normalize_dependency_analysis_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Map API / legacy alias keys to the canonical dependency-analysis shape."""
+    pressure = payload.get("cross_domain_pressure_summary")
+    if not isinstance(pressure, dict):
+        alt = payload.get("pressure_summary")
+        pressure = alt if isinstance(alt, dict) else None
+    return {
+        **payload,
+        "engine_version": payload.get("engine_version"),
+        "top_fragile_entities": (
+            payload.get("top_fragile_entities")
+            or payload.get("fragile_entities")
+            or []
+        ),
+        "concentration_hotspots": payload.get("concentration_hotspots", []),
+        "dependency_chains": payload.get("dependency_chains", []),
+        "cascading_risk_statements": (
+            payload.get("cascading_risk_statements")
+            or payload.get("cascading_risks")
+            or []
+        ),
+        "cross_domain_pressure_summary": pressure,
+    }
+
+
+def coerce_dependency_analysis_payload(raw: Any) -> dict[str, Any] | None:
+    """Accept raw JSON from /ai/dependency-analysis (object, wrapper, or single-item list)."""
+    if raw is None:
+        return None
+    candidate: dict[str, Any] | None = None
+    if isinstance(raw, dict):
+        candidate = raw
+    elif isinstance(raw, list) and raw and isinstance(raw[0], dict):
+        candidate = raw[0]
+    if candidate is None:
+        return None
+    for wrapper_key in ("data", "result", "payload", "dependency_analysis"):
+        wrapped = candidate.get(wrapper_key)
+        if isinstance(wrapped, dict) and (
+            "engine_version" in wrapped
+            or "top_fragile_entities" in wrapped
+            or "fragile_entities" in wrapped
+            or "dependency_chains" in wrapped
+            or "cross_domain_pressure_summary" in wrapped
+        ):
+            candidate = wrapped
+            break
+    return _normalize_dependency_analysis_payload(candidate)
+
+
+def build_dependency_intelligence_panel_html(payload: dict[str, Any] | None) -> str:
+    """Compact executive dependency intelligence panel (Phase 4A)."""
+    if payload is None:
+        return ""
+
+    norm = _normalize_dependency_analysis_payload(payload)
+    fragile = [e for e in norm.get("top_fragile_entities", []) if isinstance(e, dict)]
+    hotspots = [h for h in norm.get("concentration_hotspots", []) if isinstance(h, dict)]
+    chains = [c for c in norm.get("dependency_chains", []) if isinstance(c, dict)]
+    cascading = [s for s in norm.get("cascading_risk_statements", []) if isinstance(s, dict)]
+    pressure = norm.get("cross_domain_pressure_summary")
+
+    pressure_line = ""
+    if isinstance(pressure, dict):
+        summary = html.escape(str(pressure.get("summary", "")))
+        combined = float(pressure.get("combined_pressure") or 0.0)
+        pressure_line = (
+            f'<p class="dep-pressure">{summary} '
+            f'<span class="dep-chip">Combined {combined * 100:.0f}%</span></p>'
+        )
+    elif isinstance(norm.get("summary"), str) and norm.get("summary", "").strip():
+        pressure_line = f'<p class="dep-pressure">{html.escape(str(norm["summary"]))}</p>'
+
+    fragile_rows: list[str] = []
+    for ent in fragile[:5]:
+        label = html.escape(str(ent.get("label", ent.get("entity_id", ""))))
+        domain = html.escape(str(ent.get("domain", "")))
+        score = float(ent.get("fragility_score") or 0.0)
+        blast = float(ent.get("blast_radius_score") or 0.0)
+        sev = html.escape(str(ent.get("severity", "")))
+        fragile_rows.append(
+            f'<li class="dep-row">'
+            f'<span class="dep-entity">{label}</span>'
+            f'<span class="dep-meta">{domain} · frag {score:.2f} · blast {blast:.2f}</span>'
+            f'<span class="dep-sev dep-sev--{sev}">{sev}</span>'
+            "</li>"
+        )
+
+    hotspot_rows: list[str] = []
+    for spot in hotspots[:5]:
+        label = html.escape(str(spot.get("label", spot.get("entity_id", ""))))
+        domain = html.escape(str(spot.get("domain", "")))
+        conc = float(spot.get("concentration_index") or 0.0)
+        share = float(spot.get("weight_share") or 0.0)
+        hotspot_rows.append(
+            f'<li class="dep-row">'
+            f'<span class="dep-entity">{label}</span>'
+            f'<span class="dep-meta">{domain} · conc {conc:.2f} · share {share:.0%}</span>'
+            "</li>"
+        )
+
+    chain_rows: list[str] = []
+    for chain in chains[:4]:
+        labels = chain.get("path_labels") or []
+        if not isinstance(labels, list):
+            labels = []
+        path_text = html.escape(" → ".join(str(x) for x in labels if x))
+        pressure_val = float(chain.get("chain_pressure") or 0.0)
+        chain_rows.append(
+            f'<li class="dep-row dep-row--chain">'
+            f'<span class="dep-entity">{path_text}</span>'
+            f'<span class="dep-meta">pressure {pressure_val:.2f}</span>'
+            "</li>"
+        )
+
+    cascade_rows: list[str] = []
+    for stmt in cascading[:4]:
+        text = html.escape(str(stmt.get("statement", "")))
+        sev = html.escape(str(stmt.get("severity", "")))
+        src = html.escape(str(stmt.get("source_domain", "")))
+        cascade_rows.append(
+            f'<li class="dep-row dep-row--cascade">'
+            f'<span class="dep-sev dep-sev--{sev}">{sev}</span>'
+            f'<span class="dep-entity">{src}</span>'
+            f'<p class="dep-cascade-text">{text}</p>'
+            "</li>"
+        )
+
+    def _col(title: str, rows: list[str], empty: str) -> str:
+        body = "".join(rows) if rows else f'<li class="dep-empty">{html.escape(empty)}</li>'
+        return (
+            f'<div class="dep-col">'
+            f'<h4 class="dep-col-title">{html.escape(title)}</h4>'
+            f'<ul class="dep-list">{body}</ul>'
+            "</div>"
+        )
+
+    cols = (
+        _col("Fragile entities", fragile_rows, "No fragile entities flagged.")
+        + _col("Concentration hotspots", hotspot_rows, "No hotspots detected.")
+        + _col("Dependency chains", chain_rows, "No chains inferred.")
+        + _col("Cascading operational risk", cascade_rows, "No cascading statements.")
+    )
+
+    return (
+        '<div class="dep-panel-wrap" role="region" aria-label="Dependency intelligence">'
+        + pressure_line
+        + f'<div class="dep-grid">{cols}</div>'
         "</div>"
     )
 
@@ -2212,6 +2439,178 @@ def _enterprise_css() -> None:
           .rec-actions-main li + li {
             margin-top: 0.03rem !important;
           }
+          .recovery-panel-wrap {
+            margin: 0 0 0.1rem 0;
+          }
+          .recovery-row {
+            display: flex;
+            flex-direction: row;
+            flex-wrap: wrap;
+            gap: 0.28rem;
+            align-items: stretch;
+          }
+          .recovery-card {
+            flex: 1 1 30%;
+            min-width: 210px;
+            padding: 0.28rem 0.38rem 0.26rem;
+            border: 1px solid rgba(71, 85, 105, 0.22);
+            border-radius: 7px;
+            background: rgba(248, 250, 252, 0.92);
+            box-sizing: border-box;
+          }
+          .recovery-card--conservative { border-left: 2px solid #166534; }
+          .recovery-card--balanced { border-left: 2px solid #0e7490; }
+          .recovery-card--aggressive { border-left: 2px solid #c2410c; }
+          .recovery-card-head {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: baseline;
+            gap: 0.22rem 0.35rem;
+            margin-bottom: 0.06rem;
+          }
+          .recovery-kind {
+            font-size: 0.62rem;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: #64748b;
+          }
+          .recovery-title {
+            font-size: 0.74rem;
+            font-weight: 600;
+            color: #0f172a;
+            line-height: 1.2;
+          }
+          .recovery-metrics {
+            margin: 0 0 0.06rem 0;
+            font-size: 0.68rem;
+            font-weight: 500;
+            line-height: 1.22;
+            color: #334155;
+          }
+          .recovery-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.18rem;
+            margin: 0 0 0.06rem 0;
+          }
+          .recovery-chip {
+            display: inline-block;
+            font-size: 0.6rem;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            padding: 0.04rem 0.28rem;
+            border-radius: 4px;
+            border: 1px solid rgba(71, 85, 105, 0.2);
+            background: rgba(241, 245, 249, 0.9);
+            color: #475569;
+          }
+          .recovery-chip--conf { color: #0f766e; border-color: rgba(15, 118, 110, 0.25); }
+          .recovery-chip--horizon { color: #1e40af; border-color: rgba(30, 64, 175, 0.22); }
+          .recovery-tradeoff {
+            margin: 0;
+            font-size: 0.66rem;
+            line-height: 1.2;
+            color: #64748b;
+          }
+          .recovery-assumption {
+            margin: 0.04rem 0 0 0;
+            font-size: 0.64rem;
+            line-height: 1.18;
+            color: #94a3b8;
+            font-style: italic;
+          }
+          div[data-testid="stMarkdownContainer"]:has(.recovery-panel-wrap) p {
+            margin: 0;
+          }
+          .dep-panel-wrap {
+            margin: 0 0 0.12rem 0;
+          }
+          .dep-pressure {
+            margin: 0 0 0.08rem 0;
+            font-size: 0.68rem;
+            line-height: 1.25;
+            color: #475569;
+          }
+          .dep-chip {
+            display: inline-block;
+            font-size: 0.6rem;
+            font-weight: 600;
+            padding: 0.03rem 0.28rem;
+            margin-left: 0.2rem;
+            border-radius: 4px;
+            border: 1px solid rgba(71, 85, 105, 0.2);
+            background: rgba(241, 245, 249, 0.9);
+            color: #1e40af;
+          }
+          .dep-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.28rem;
+          }
+          @media (min-width: 1100px) {
+            .dep-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+          }
+          .dep-col {
+            padding: 0.26rem 0.34rem;
+            border: 1px solid rgba(71, 85, 105, 0.2);
+            border-radius: 7px;
+            background: rgba(248, 250, 252, 0.92);
+            min-height: 4.5rem;
+          }
+          .dep-col-title {
+            margin: 0 0 0.06rem 0;
+            font-size: 0.62rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            color: #64748b;
+          }
+          .dep-list {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+          }
+          .dep-row {
+            margin: 0 0 0.06rem 0;
+            font-size: 0.66rem;
+            line-height: 1.2;
+            color: #334155;
+          }
+          .dep-entity {
+            display: block;
+            font-weight: 600;
+            color: #0f172a;
+          }
+          .dep-meta {
+            display: block;
+            font-size: 0.62rem;
+            color: #64748b;
+          }
+          .dep-sev {
+            display: inline-block;
+            font-size: 0.58rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-right: 0.2rem;
+          }
+          .dep-sev--critical { color: #b91c1c; }
+          .dep-sev--high { color: #c2410c; }
+          .dep-sev--medium { color: #a16207; }
+          .dep-sev--low { color: #64748b; }
+          .dep-cascade-text {
+            margin: 0.02rem 0 0 0;
+            font-size: 0.64rem;
+            color: #64748b;
+          }
+          .dep-empty {
+            font-size: 0.64rem;
+            color: #94a3b8;
+            font-style: italic;
+          }
+          div[data-testid="stMarkdownContainer"]:has(.dep-panel-wrap) p {
+            margin: 0;
+          }
           .scenario-shell {
             max-height: 280px;
             overflow: hidden;
@@ -2987,6 +3386,28 @@ def _ai_recommendations_panel(
             st.caption(f"Showing {min(default_visible, n_total)} of {n_total}, ranked by priority score.")
 
 
+def _recovery_scenarios_panel(payload: dict[str, Any] | None) -> None:
+    meta = _engine_version_meta(payload)
+    _section_head("Recovery scenarios", meta, compact=True, variant="executive")
+    if payload is None:
+        st.caption("Recovery scenarios unavailable.")
+        return
+    html_out = build_recovery_scenarios_panel_html(payload)
+    if not html_out:
+        st.caption("No recovery scenarios returned.")
+        return
+    st.markdown(html_out, unsafe_allow_html=True)
+
+
+def _dependency_intelligence_panel(payload: dict[str, Any] | None) -> None:
+    meta = _engine_version_meta(payload)
+    _section_head("Dependency intelligence", meta, compact=True, variant="executive")
+    if payload is None:
+        st.caption("Dependency intelligence unavailable.")
+        return
+    st.markdown(build_dependency_intelligence_panel_html(payload), unsafe_allow_html=True)
+
+
 def _scenario_distribution_chart(dist: dict[str, Any] | None) -> None:
     _section_head("Scenario mix (preview)", variant="soft")
     if not dist or not dist.get("items"):
@@ -3144,6 +3565,15 @@ def main() -> None:
     errors: list[str] = []
     timeout = float(os.environ.get("SUPPLY_CHAIN_API_TIMEOUT", "30"))
 
+    inv: Any | None = None
+    deliv: Any | None = None
+    sup: Any | None = None
+    risks_payload: Any | None = None
+    scenarios: Any | None = None
+    ai: Any | None = None
+    recovery: Any | None = None
+    dependency: Any | None = None
+
     with httpx.Client(timeout=timeout) as client:
         inv, e = _fetch_json(client, "/analytics/inventory-risk-summary")
         if e:
@@ -3166,6 +3596,14 @@ def main() -> None:
             errors.append(e)
 
         ai, e = _fetch_json(client, "/ai/recommendations?operational_risk_limit=15")
+        if e:
+            errors.append(e)
+
+        recovery, e = _fetch_json(client, "/ai/recovery-scenarios")
+        if e:
+            errors.append(e)
+
+        dependency, e = _fetch_json(client, "/ai/dependency-analysis?operational_risk_limit=20")
         if e:
             errors.append(e)
 
@@ -3241,6 +3679,10 @@ def main() -> None:
         kpi_context=kpi_ctx,
         intel_bundle=intel_bundle,
     )
+
+    _recovery_scenarios_panel(recovery if isinstance(recovery, dict) else None)
+
+    _dependency_intelligence_panel(coerce_dependency_analysis_payload(dependency))
 
     _scenario_distribution_chart(scenarios if isinstance(scenarios, dict) else None)
 
